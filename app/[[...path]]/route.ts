@@ -24,55 +24,35 @@ export async function PATCH(request: NextRequest) {
 
 async function proxyRequest(request: NextRequest) {
   try {
-    const url = new URL(request.url)
-    const pathname = url.pathname === "/" ? "" : url.pathname
-    const targetUrl = `${TARGET_URL}${pathname}${url.search}`
+    const url = new URL(request.url);
+    const pathname = url.pathname === "/" ? "" : url.pathname;
+    const targetUrl = `${TARGET_URL}${pathname}${url.search}`;
 
-    console.log(`Proxying ${request.method} ${url.pathname} -> ${targetUrl}`)
-
-    // Prepare headers, excluding problematic ones
-    const headers = new Headers()
+    const headers = new Headers();
     request.headers.forEach((value, key) => {
-      const lowerKey = key.toLowerCase()
+      const lowerKey = key.toLowerCase();
       if (!["host", "connection", "x-forwarded-for", "x-forwarded-proto", "x-forwarded-host"].includes(lowerKey)) {
-        headers.set(key, value)
+        headers.set(key, value);
       }
-    })
+    });
 
-    // Handle request body for non-GET requests
-    let body: BodyInit | undefined = undefined
-    if (request.method !== "GET" && request.method !== "HEAD") {
-      body = request.body
-    }
+    // Forward the raw request body stream directly (for all methods except GET/HEAD)
+    const body = (request.method === "GET" || request.method === "HEAD") ? undefined : request.body;
 
-    // Make the proxied request
     const response = await fetch(targetUrl, {
       method: request.method,
       headers,
-      body,
-    })
+      body, // <-- pass the raw stream here, NOT text
+    });
 
-    // Get response content
-    const responseBody = response.body
-    
-    const proxyResponse = new NextResponse(responseBody, {
+    // Use response.body stream directly to pipe it back (don't do response.text())
+    return new NextResponse(response.body, {
       status: response.status,
       statusText: response.statusText,
-    })
-    
-    // Copy safe response headers
-    response.headers.forEach((value, key) => {
-      const lowerKey = key.toLowerCase()
-      if (!["content-encoding", "transfer-encoding", "connection"].includes(lowerKey)) {
-        proxyResponse.headers.set(key, value)
-      }
-    })
-
-    return proxyResponse
+      headers: filterResponseHeaders(response.headers),
+    });
   } catch (error) {
-    console.error("Proxy error:", error)
-
-    // Return a more detailed error response
+    console.error("Proxy error:", error);
     return new NextResponse(
       JSON.stringify({
         error: "Proxy failed",
@@ -82,7 +62,18 @@ async function proxyRequest(request: NextRequest) {
       {
         status: 500,
         headers: { "Content-Type": "application/json" },
-      },
-    )
+      }
+    );
   }
+}
+
+function filterResponseHeaders(headers) {
+  const newHeaders = new Headers();
+  headers.forEach((value, key) => {
+    const lowerKey = key.toLowerCase();
+    if (!["content-encoding", "transfer-encoding", "connection"].includes(lowerKey)) {
+      newHeaders.set(key, value);
+    }
+  });
+  return newHeaders;
 }
