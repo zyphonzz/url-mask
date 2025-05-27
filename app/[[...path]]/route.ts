@@ -53,14 +53,13 @@ async function proxyRequest(request: NextRequest) {
     })
 
     // Get response content
-    const responseText = await response.text()
-
-    // Create response with proper headers
-    const proxyResponse = new NextResponse(responseText, {
+    const responseBody = response.body
+    
+    const proxyResponse = new NextResponse(responseBody, {
       status: response.status,
       statusText: response.statusText,
     })
-
+    
     // Copy safe response headers
     response.headers.forEach((value, key) => {
       const lowerKey = key.toLowerCase()
