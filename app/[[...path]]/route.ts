@@ -42,11 +42,7 @@ async function proxyRequest(request: NextRequest) {
     // Handle request body for non-GET requests
     let body: BodyInit | undefined = undefined
     if (request.method !== "GET" && request.method !== "HEAD") {
-      try {
-        body = await request.text()
-      } catch (e) {
-        console.log("No body to forward")
-      }
+      body = request.body
     }
 
     // Make the proxied request
